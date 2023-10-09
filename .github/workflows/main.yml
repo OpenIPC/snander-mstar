@@ -1,0 +1,45 @@
+name: build
+on:
+  push:
+    branches:
+      - master
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Linux
+        run: |
+          HOST=x86_64-linux-musl
+          sudo apt-get update
+          sudo apt-get install musl-dev
+          sudo ln -s /usr/include/linux /usr/include/x86_64-linux-musl
+          sudo ln -s /usr/include/asm-generic /usr/include/x86_64-linux-musl
+          sudo ln -s /usr/include/x86_64-linux-gnu/asm /usr/include/x86_64-linux-musl
+          git clone https://github.com/libusb/libusb --depth=1
+          bash -c "cd libusb; ./autogen.sh --host=$HOST --disable-udev --libdir=$PWD/linux; make -j8 install-exec"
+          make CC=$HOST-gcc CFLAGS="-static -s" LDFLAGS="-I libusb/libusb -L linux -lusb-1.0"
+          rm -rf libusb
+          zip -r snander-linux.zip snander
+
+      - name: Windows
+        run: |
+          HOST=x86_64-w64-mingw32
+          sudo apt-get update
+          sudo apt-get install mingw-w64
+          git clone https://github.com/libusb/libusb --depth=1
+          bash -c "cd libusb; ./autogen.sh --host=$HOST --libdir=$PWD/windows; make -j8 install-exec"
+          make CC=$HOST-gcc CFLAGS="-static -s" LDFLAGS="-I libusb/libusb -L windows -lusb-1.0"
+          rm -rf libusb
+          zip -r snander-windows.zip driver snander.exe
+
+      - name: Upload
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: latest
+          files: |
+            snander-linux.zip
+            snander-windows.zip
